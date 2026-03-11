@@ -82,9 +82,11 @@ jobs:
         run: |
           # Set CONFIG dynamically based on inputs values
           CONFIG="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.sub_level }}"
+          DEFCONFIG="$CONFIG/common/arch/arm64/configs/gki_defconfig"
 
           # Set CONFIG as an environment variable for future steps
           echo "CONFIG=$CONFIG" >> $GITHUB_ENV
+          echo "DEFCONFIG=$DEFCONFIG" >> $GITHUB_ENV
 
           echo "CONFIG set to: $CONFIG"
           
@@ -176,18 +178,8 @@ jobs:
           # Sukisu的补丁仓库
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           # Next Fix Patch
-          git clone https://github.com/zzh20188/GKI_KernelSU_SUSFS.git zzh_patch
-          git clone https://github.com/Numbersf/Action-Build.git
-          
-      - name: Sets the CONFIG environment variable
-        run: |
-          # Set CONFIG dynamically based on inputs values
-          CONFIG="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.sub_level }}"
-
-          # Set CONFIG as an environment variable for future steps
-          echo "CONFIG=$CONFIG" >> $GITHUB_ENV
-
-          echo "CONFIG set to: $CONFIG"
+          git clone https://github.com/zzh20188/GKI_KernelSU_SUSFS.git zzh
+          git clone https://github.com/Numbersf/Action-Build.git -b "ReSukiSU"
 
       - name: Initialize and synchronize kernel source code
         run: |
@@ -336,6 +328,10 @@ jobs:
             cd ./common
             patch -p1 --fuzz=3 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
             echo "Applying SukiSU specific SUSFS patch..."
+            cp "../../Action-Build/patches/unicode_bypass_fix_6.1+.patch" ./
+            cp "../../Action-Build/patches/IPv6_NAT_FIX.patch" ./
+            patch -p1 --forward < unicode_bypass_fix_6.1+.patch || true
+            patch -p1 --forward < IPv6_NAT_FIX.patch || true
           elif [ "${{ inputs.kernelsu_variant }}" == "YukiSU" ]; then
             echo "Applying SUSFS patches for YukiSU..."
             cd ./KernelSU
@@ -344,25 +340,7 @@ jobs:
             echo "Invalid KernelSU variant selected!"
             exit 1
           fi
-
-      - name: Enable Hymofs
-        if: ${{ inputs.use_hymofs }}
-        run: |
-          echo "Changed to configuration directory: $CONFIG..."
-          cd "$CONFIG/common"
-
-          echo "Applying HymoFS patches..."
-
-          # Copy HymoFS patches
-          cp ../../HymoFS/src_modified_with_susfs/fs/hymofs.c ./fs
-          cp ../../HymoFS/src_modified_with_susfs/fs/hymofs_ioctl.h ./fs/
-          cp ../../HymoFS/src_modified_with_susfs/fs/hymofs.h ./fs/
-          cp ../../HymoFS/patch/hymofs_with_susfs.patch ./
           
-          patch -p1 --fuzz=3 --forward < hymofs_with_susfs.patch || true
-          echo "CONFIG_KSU_HYMOFS=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_HYMOFS_LSMBPS=y" >> ./arch/arm64/configs/gki_defconfig
-
       - name: Some fixes/patches
         run: |
           cd "$CONFIG/common"
@@ -397,13 +375,6 @@ jobs:
               fi
             fi
           fi
-  
-      - name: Apply UNICODE_BYPASS and MEMORY_OPT
-        run: |
-          cd "$CONFIG/common"
-          cp "../../kernel_patches/common/clear_page_16bytes_align.patch" ./
-          patch -p1 -F3 --forward < clear_page_16bytes_align.patch
-          patch -p1 --forward < "../../kernel_patches/common/unicode_bypass_fix_6.1+.patch" || true
           
       - name: Apply a patch to hide a certain feature.
         run: |
@@ -487,7 +458,7 @@ jobs:
           # If you need to change the build time, please modify the following variable CURRENT_TIME to the example string below, such as: CURRENT_TIME="Sat Jun 07 06:29:29 UTC 2025"
           # This string represents UTC time: June 7, 2025, 06:29:29. "Sat" is an abbreviation for Saturday, and "Jun" is an abbreviation for June.
           # If you want to use Beijing time, it should fi: CURRENT_TIME="Sat Jun 07 14:29:29 CST 2025"
-          CURRENT_TIME="Wed Dec 17 08:45:53 UTC 2025"
+          CURRENT_TIME="Fri Jan 9 16:33:46 UTC 2026"
 
           echo "CURRENT_TIME=$CURRENT_TIME"
           perl -pi -e "s{UTS_VERSION=\"\\\$\(echo \\\$UTS_VERSION \\\$CONFIG_FLAGS \\\$TIMESTAMP \\| cut -b -\\\$UTS_LEN\)\"}{UTS_VERSION=\"#1 SMP PREEMPT $CURRENT_TIME\"}" ./common/scripts/mkcompile_h
